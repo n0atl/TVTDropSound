@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build
+        shell: cmd
+        run: build.bat
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist\DropSound\bin\x86, dist\DropSound\bin\x64 | Out-Null
+          Copy-Item bin\x86\DropSound.tvtp dist\DropSound\bin\x86\
+          Copy-Item bin\x64\DropSound.tvtp dist\DropSound\bin\x64\
+          Copy-Item README.md, LICENSE dist\DropSound\
+          $name = if ($env:GITHUB_REF_TYPE -eq 'tag') { "DropSound-$env:GITHUB_REF_NAME" } else { 'DropSound' }
+          Compress-Archive -Path dist\DropSound\* -DestinationPath "dist\$name.zip"
+          "ZIP=dist\$name.zip" >> $env:GITHUB_ENV
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: DropSound
+          path: dist/DropSound/
+
+      - name: Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME $env:ZIP --title $env:GITHUB_REF_NAME --generate-notes

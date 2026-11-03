@@ -1,0 +1,7 @@
+LIBRARY DropSound.tvtp
+
+EXPORTS
+	TVTGetVersion
+	TVTGetPluginInfo
+	TVTInitialize
+	TVTFinalize

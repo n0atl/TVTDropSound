@@ -1,0 +1,39 @@
+#pragma code_page(65001)
+
+#include <windows.h>
+#include "resource.h"
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+IDD_SETTINGS DIALOGEX 0, 0, 260, 254
+STYLE DS_MODALFRAME | DS_SHELLFONT | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "DropSound の設定"
+FONT 9, "Meiryo UI", 0, 0, 0x1
+BEGIN
+    GROUPBOX        "ドロップ時に鳴らす音", IDC_STATIC, 7, 7, 246, 96
+    AUTORADIOBUTTON "システム音(&S)", IDC_MODE_SYSTEM, 14, 21, 72, 10, WS_GROUP | WS_TABSTOP
+    COMBOBOX        IDC_SYSTEM_SOUND, 90, 19, 156, 120, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    AUTORADIOBUTTON "音声ファイル(&F)", IDC_MODE_FILE, 14, 39, 80, 10
+    EDITTEXT        IDC_FILE_PATH, 24, 52, 170, 14, ES_AUTOHSCROLL | WS_GROUP
+    PUSHBUTTON      "参照(&B)...", IDC_BROWSE, 198, 52, 48, 14
+    LTEXT           "音量(&V):", IDC_STATIC, 24, 73, 40, 8
+    EDITTEXT        IDC_VOLUME, 66, 71, 30, 14, ES_NUMBER
+    LTEXT           "% (0～100)", IDC_STATIC, 100, 73, 60, 8
+    LTEXT           "WAV / MP3 / WMA などが使えます", IDC_STATIC, 24, 89, 220, 8
+    GROUPBOX        "鳴らすタイミング", IDC_STATIC, 7, 109, 246, 64
+    AUTORADIOBUTTON "Dropの数値が増えるたびに毎回鳴らす(&E)", IDC_TIMING_EVERY, 14, 122, 200, 10, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "間隔を空けて鳴らす(&I):", IDC_TIMING_INTERVAL, 14, 139, 96, 10
+    EDITTEXT        IDC_INTERVAL, 112, 137, 30, 14, ES_NUMBER | WS_GROUP
+    LTEXT           "秒に最大1回", IDC_STATIC, 146, 139, 80, 8
+    AUTOCHECKBOX    "映像・音声のPIDでドロップしたときだけ鳴らす(&A)", IDC_ONLY_AV, 14, 157, 230, 10
+    GROUPBOX        "ピッチ", IDC_STATIC, 7, 179, 246, 46
+    AUTOCHECKBOX    "増加量が多いほどピッチを上げる(&P)", IDC_PITCH, 14, 192, 200, 10
+    LTEXT           "1秒あたりの増加量が", IDC_STATIC, 24, 209, 72, 8
+    EDITTEXT        IDC_PITCH_THRESHOLD, 98, 207, 44, 14, ES_NUMBER
+    LTEXT           "以上で上がり始める", IDC_STATIC, 146, 209, 100, 8
+    PUSHBUTTON      "テスト再生(&T)", IDC_TEST, 7, 233, 64, 14
+    LTEXT           "増加量:", IDC_STATIC, 75, 236, 28, 8
+    EDITTEXT        IDC_TEST_INCREASE, 103, 234, 40, 14, ES_NUMBER
+    DEFPUSHBUTTON   "OK", IDOK, 149, 233, 50, 14
+    PUSHBUTTON      "キャンセル", IDCANCEL, 203, 233, 50, 14
+END
