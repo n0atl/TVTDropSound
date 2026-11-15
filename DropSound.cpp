@@ -56,6 +56,7 @@ struct Settings
 	bool OnlyAV = false;       // 映像・音声の PID でドロップしたときだけ鳴らす
 	bool PitchUp = true;       // 増加量が多いほどピッチを上げる
 	int PitchThreshold = 100;  // ピッチを上げ始める 1 秒あたりの増加量
+	std::wstring DisableDrivers = L"BonDriver_Pipe.dll";  // 鳴らさない BonDriver(':' 区切り)
 };
 
 int Clamp(int Value, int Min, int Max)
@@ -95,6 +96,26 @@ std::wstring GetSystemSoundPath(LPCWSTR pszAlias)
 	return szPath;
 }
 
+// ':' 区切りのリストに BonDriver のファイル名が含まれているか(大文字小文字は区別しない)
+bool IsDriverInList(const std::wstring &List, LPCWSTR pszDriver)
+{
+	if (pszDriver[0] == L'\0')
+		return false;
+	std::wstring::size_type Pos = 0;
+	while (Pos <= List.length()) {
+		std::wstring::size_type End = List.find(L':', Pos);
+		if (End == std::wstring::npos)
+			End = List.length();
+		std::wstring Name = List.substr(Pos, End - Pos);
+		Name.erase(0, Name.find_first_not_of(L" \t"));
+		Name.erase(Name.find_last_not_of(L" \t") + 1);
+		if (!Name.empty() && ::lstrcmpiW(Name.c_str(), pszDriver) == 0)
+			return true;
+		Pos = End + 1;
+	}
+	return false;
+}
+
 }
 
 
@@ -118,6 +139,7 @@ private:
 
 	CPidDropCounter m_AVDropCounter;
 	bool m_fStreamCallback = false;
+	bool m_fDisabledDriver = false;  // 鳴らさない BonDriver を使っているか
 
 	bool m_fMciOpen[MCI_SLOTS] = {};
 	int m_NextMciSlot = 0;
@@ -133,6 +155,7 @@ private:
 	void CheckDrop();
 	void UpdateStreamCallback(bool fEnabled);
 	void UpdateAVPids();
+	void UpdateDriverState();
 	void PlaySoundBySettings(const Settings &s, int Speed = 1000);
 	bool PlayMci(const std::wstring &Path, int Volume, int Speed);
 	void CloseMci();
@@ -214,6 +237,9 @@ void CDropSound::LoadSettings()
 	m_Settings.OnlyAV = ::GetPrivateProfileIntW(L"Settings", L"OnlyAV", 0, pszIni) != 0;
 	m_Settings.PitchUp = ::GetPrivateProfileIntW(L"Settings", L"PitchUp", 1, pszIni) != 0;
 	m_Settings.PitchThreshold = Clamp(::GetPrivateProfileIntW(L"Settings", L"PitchThreshold", 100, pszIni), 1, 100000000);
+	WCHAR szDrivers[1024] = {};
+	::GetPrivateProfileStringW(L"Settings", L"DisableDrivers", Settings().DisableDrivers.c_str(), szDrivers, _countof(szDrivers), pszIni);
+	m_Settings.DisableDrivers = szDrivers;
 }
 
 
@@ -241,6 +267,7 @@ void CDropSound::SaveSettings()
 	::WritePrivateProfileStringW(L"Settings", L"OnlyAV", m_Settings.OnlyAV ? L"1" : L"0", pszIni);
 	::WritePrivateProfileStringW(L"Settings", L"PitchUp", m_Settings.PitchUp ? L"1" : L"0", pszIni);
 	::WritePrivateProfileStringW(L"Settings", L"PitchThreshold", std::to_wstring(m_Settings.PitchThreshold).c_str(), pszIni);
+	::WritePrivateProfileStringW(L"Settings", L"DisableDrivers", m_Settings.DisableDrivers.c_str(), pszIni);
 }
 
 
@@ -301,6 +328,21 @@ void CDropSound::UpdateAVPids()
 }
 
 
+// 録画ファイルの再生などに使う BonDriver では鳴らさない
+void CDropSound::UpdateDriverState()
+{
+	WCHAR szDriver[MAX_PATH] = {};
+	m_pApp->GetDriverName(szDriver, _countof(szDriver));
+	// ディレクトリが付いている場合もあるので、ファイル名だけで比べる
+	LPCWSTR pszName = szDriver;
+	for (LPCWSTR p = szDriver; *p != L'\0'; p++) {
+		if (*p == L'\\' || *p == L'/')
+			pszName = p + 1;
+	}
+	m_fDisabledDriver = IsDriverInList(m_Settings.DisableDrivers, pszName);
+}
+
+
 BOOL CALLBACK CDropSound::StreamCallback(BYTE *pData, void *pClientData)
 {
 	static_cast<CDropSound*>(pClientData)->m_AVDropCounter.InputPacket(pData);
@@ -310,6 +352,13 @@ BOOL CALLBACK CDropSound::StreamCallback(BYTE *pData, void *pClientData)
 
 void CDropSound::CheckDrop()
 {
+	UpdateDriverState();
+	if (m_fDisabledDriver) {
+		// 対象外の BonDriver から戻ったときに鳴らないよう、基準を取り直させる
+		ResetBaseline();
+		return;
+	}
+
 	DWORD DropCount;
 	if (m_fStreamCallback) {
 		DropCount = m_AVDropCounter.GetDropCount();
@@ -517,6 +566,9 @@ static Settings GetDialogSettings(HWND hDlg)
 	s.OnlyAV = ::IsDlgButtonChecked(hDlg, IDC_ONLY_AV) == BST_CHECKED;
 	s.PitchUp = ::IsDlgButtonChecked(hDlg, IDC_PITCH) == BST_CHECKED;
 	s.PitchThreshold = Clamp(::GetDlgItemInt(hDlg, IDC_PITCH_THRESHOLD, nullptr, FALSE), 1, 100000000);
+	WCHAR szDrivers[1024] = {};
+	::GetDlgItemTextW(hDlg, IDC_DISABLE_DRIVERS, szDrivers, _countof(szDrivers));
+	s.DisableDrivers = szDrivers;
 	return s;
 }
 
@@ -543,6 +595,7 @@ INT_PTR CALLBACK CDropSound::DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM
 			::CheckDlgButton(hDlg, IDC_ONLY_AV, s.OnlyAV ? BST_CHECKED : BST_UNCHECKED);
 			::CheckDlgButton(hDlg, IDC_PITCH, s.PitchUp ? BST_CHECKED : BST_UNCHECKED);
 			::SetDlgItemInt(hDlg, IDC_PITCH_THRESHOLD, s.PitchThreshold, FALSE);
+			::SetDlgItemTextW(hDlg, IDC_DISABLE_DRIVERS, s.DisableDrivers.c_str());
 			::SetDlgItemInt(hDlg, IDC_TEST_INCREASE, 1, FALSE);
 			pThis->UpdateDialogControls(hDlg);
 		}
